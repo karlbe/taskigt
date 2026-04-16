@@ -54,12 +54,14 @@ type model struct {
 	store          *tasks.Store
 	keys           keyMap
 	buildVersion   string
+	storePath      string
 	cursor         int
 	scroll         int
 	width          int
 	height         int
 	moving         bool
 	confirming     bool
+	aboutScreen    bool
 	// edit screen
 	editScreen        bool
 	editIsNew         bool // true when creating a new task
@@ -77,12 +79,13 @@ type model struct {
 	undoSet        []tasks.Task
 }
 
-func NewModel(state tasks.AppState, store *tasks.Store, buildVersion string) tea.Model {
+func NewModel(state tasks.AppState, store *tasks.Store, buildVersion string, storePath string) tea.Model {
 	m := model{
 		state:        state,
 		store:        store,
 		keys:         defaultKeyMap(),
 		buildVersion: buildVersion,
+		storePath:    storePath,
 		cursor:       0,
 	}
 	m.clampCursor()
@@ -100,6 +103,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 	case tea.KeyMsg:
+		if m.aboutScreen {
+			m.aboutScreen = false
+			return m, nil
+		}
 		if m.confirming {
 			return m.handleConfirmMode(msg)
 		}
@@ -184,6 +191,9 @@ func (m *model) inputAfter() string {
 
 func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
+	case key.Matches(msg, m.keys.About):
+		m.aboutScreen = true
+		return m, nil
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
 	case key.Matches(msg, m.keys.Up):
@@ -590,6 +600,7 @@ func (m *model) keyBarItems() [][2]string {
 		{"p", "pause"},
 		{"m", "move"},
 		{"x", "archive"},
+		{"?", "about"},
 		{"q", "quit"},
 	}
 }
@@ -710,7 +721,23 @@ func (m model) View() string {
 	// ── body ─────────────────────────────────────────────────────────────────
 	var body strings.Builder
 
-	if m.confirming {
+	if m.aboutScreen {
+		body.WriteString("\n")
+		body.WriteString(selectedRowStyle.Render("  taskigt") + "\n")
+		if m.buildVersion != "" {
+			body.WriteString(hintStyle.Render("  "+m.buildVersion) + "\n")
+		}
+		body.WriteString("\n")
+		body.WriteString("  Built by Karl Bernstål\n")
+		body.WriteString("\n")
+		body.WriteString(hintStyle.Render("  The task manager that judges you for having too many tasks.") + "\n")
+		body.WriteString(hintStyle.Render("  Taskigt: Swedish for \"mean\". It knows what it is.") + "\n")
+		body.WriteString(hintStyle.Render("  No due dates were harmed in the making of this software.") + "\n")
+		body.WriteString("\n")
+		body.WriteString(hintStyle.Render("  Data: "+m.storePath) + "\n")
+		body.WriteString("\n")
+		body.WriteString(hintStyle.Render("  Press any key to close") + "\n")
+	} else if m.confirming {
 		title := ""
 		if len(m.state.Tasks) > 0 {
 			title = m.state.Tasks[m.cursor].Title

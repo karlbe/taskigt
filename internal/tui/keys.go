@@ -21,6 +21,7 @@ type keyMap struct {
 	Confirm     key.Binding
 	Deny        key.Binding
 	Backspace   key.Binding
+	About       key.Binding
 }
 
 func defaultKeyMap() keyMap {
@@ -43,6 +44,7 @@ func defaultKeyMap() keyMap {
 		Quit:        key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 		Cancel:      key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
 		Backspace:   key.NewBinding(key.WithKeys("backspace"), key.WithHelp("⌫", "backspace")),
+		About:       key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "about")),
 	}
 }
 

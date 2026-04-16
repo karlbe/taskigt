@@ -29,7 +29,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	model := tui.NewModel(state, store, BuildVersion)
+	model := tui.NewModel(state, store, BuildVersion, storePath)
 	program := tea.NewProgram(model, tea.WithAltScreen())
 
 	if _, err := program.Run(); err != nil {

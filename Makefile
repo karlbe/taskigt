@@ -1,5 +1,12 @@
 APP := taskigt
-BINARY := bin/$(APP)
+
+ifeq ($(OS),Windows_NT)
+  BINARY := bin/$(APP).exe
+  INSTALL_BINARY := ~/bin/$(APP).exe
+else
+  BINARY := bin/$(APP)
+  INSTALL_BINARY := ~/bin/$(APP)
+endif
 
 .PHONY: run test build clean
 
@@ -17,7 +24,7 @@ build:
 
 install: build
 	mkdir -p ~/bin
-	cp $(BINARY) ~/bin/$(APP)
+	cp $(BINARY) $(INSTALL_BINARY)
 
 clean:
 	rm -rf bin

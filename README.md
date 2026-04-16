@@ -1,19 +1,36 @@
 # taskigt
 
-Minimal checklist manager in terminal with Bubble Tea.
+Mean minimal checklist manager in terminal with Bubble Tea.
 
 ## Keybindings
 
+### Normal mode
+
 - `↑/↓`: navigate
-- `m`: toggle move mode (then use `↑/↓` to move selected task up/down)
-- `enter`: toggle done/undone
-  - keeps task in current position
+- `enter`: toggle task done/undone
+- `p`: pause/unpause task
 - `a`: add task
-- `d`: delete selected task
-- `K` / `J`: move selected task one step up/down
-- `g` / `G`: move selected task to top/bottom
+- `e`: edit task title
+- `D`: set due date
+- `delete`: delete selected task (prompts for confirmation)
+- `m`: enter move mode — use `↑/↓` to reorder, `enter` to confirm, `m`/`esc` to cancel
 - `x`: archive all done tasks (press `x` again to undo last archive)
+- `?`: about
 - `q` or `ctrl+c`: quit
+
+### Edit screen
+
+- `↑/↓`: navigate fields
+- `enter`: activate/confirm field
+- `←/→`: move cursor within field
+- `backspace`/`delete`: delete characters
+- `esc`: revert field / discard changes
+- `w`: save and exit
+
+### Confirmation dialog
+
+- `y`: confirm
+- `n` or `esc`: cancel
 
 ## Persistence
 
