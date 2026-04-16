@@ -2,3 +2,4 @@ bin/
 id_rsa_taskigt
 id_rsa_taskigt.pub
 internal/tui/model.go
+taskigt.exe

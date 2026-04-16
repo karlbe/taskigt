@@ -21,6 +21,7 @@ type Task struct {
 type AppState struct {
 	Tasks    []Task `json:"tasks"`
 	Archived []Task `json:"archived"`
+	Lang     string `json:"lang,omitempty"`
 }
 
 func NewEmptyState() AppState {

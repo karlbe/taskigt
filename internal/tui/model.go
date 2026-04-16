@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"taskigt/internal/i18n"
 	"taskigt/internal/tasks"
 )
 
@@ -43,6 +44,17 @@ var (
 		Bold(true)
 )
 
+type langOption struct {
+	code  string
+	label string
+	get   func() i18n.Strings
+}
+
+var availableLangs = []langOption{
+	{"en", "English", i18n.English},
+	{"sv", "Svenska", i18n.Swedish},
+}
+
 // editDraft holds unsaved field values while the edit screen is open.
 type editDraft struct {
 	Title  string
@@ -53,6 +65,7 @@ type model struct {
 	state          tasks.AppState
 	store          *tasks.Store
 	keys           keyMap
+	str            i18n.Strings
 	buildVersion   string
 	storePath      string
 	cursor         int
@@ -62,6 +75,7 @@ type model struct {
 	moving         bool
 	confirming     bool
 	aboutScreen    bool
+	aboutLangIdx   int
 	// edit screen
 	editScreen        bool
 	editIsNew         bool // true when creating a new task
@@ -79,13 +93,22 @@ type model struct {
 	undoSet        []tasks.Task
 }
 
-func NewModel(state tasks.AppState, store *tasks.Store, buildVersion string, storePath string) tea.Model {
+func NewModel(state tasks.AppState, store *tasks.Store, buildVersion string, storePath string, str i18n.Strings) tea.Model {
+	langIdx := 0
+	for i, l := range availableLangs {
+		if l.code == state.Lang {
+			langIdx = i
+			break
+		}
+	}
 	m := model{
 		state:        state,
 		store:        store,
-		keys:         defaultKeyMap(),
+		keys:         defaultKeyMap(str),
+		str:          str,
 		buildVersion: buildVersion,
 		storePath:    storePath,
+		aboutLangIdx: langIdx,
 		cursor:       0,
 	}
 	m.clampCursor()
@@ -104,8 +127,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyMsg:
 		if m.aboutScreen {
-			m.aboutScreen = false
-			return m, nil
+			return m.handleAboutScreen(msg)
 		}
 		if m.confirming {
 			return m.handleConfirmMode(msg)
@@ -223,13 +245,13 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// confirm move
 			m.moving = false
 			m.moveSnapshot = nil
-			m.status = "order saved"
+			m.status = m.str.StatusOrderSaved
 			m.lastErr = nil
 			m.save()
 			break
 		}
 		if len(m.state.Tasks) == 0 {
-			m.status = "no task selected"
+			m.status = m.str.StatusNoTaskSelected
 			break
 		}
 		idx, err := tasks.ToggleDone(&m.state, m.cursor, time.Now())
@@ -251,7 +273,7 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cursor = m.moveCursorOrig
 			m.moveSnapshot = nil
 			m.moving = false
-			m.status = "move cancelled"
+			m.status = m.str.StatusMoveCancelled
 			m.lastErr = nil
 			m.save()
 			break
@@ -271,7 +293,7 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cursor = m.moveCursorOrig
 			m.moveSnapshot = nil
 			m.moving = false
-			m.status = "move cancelled"
+			m.status = m.str.StatusMoveCancelled
 			m.lastErr = nil
 			m.save()
 		}
@@ -288,7 +310,7 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.lastErr = nil
 	case key.Matches(msg, m.keys.Delete):
 		if len(m.state.Tasks) == 0 {
-			m.status = "no task selected"
+			m.status = m.str.StatusNoTaskSelected
 			break
 		}
 		m.confirming = true
@@ -326,7 +348,7 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			restored := tasks.UnarchiveTasks(&m.state, m.undoSet, now)
 			m.undoSet = nil
 			m.clampCursor()
-			m.status = fmt.Sprintf("restored %d task(s)", restored)
+			m.status = fmt.Sprintf(m.str.StatusRestoredFmt, restored)
 			m.lastErr = nil
 			m.save()
 			break
@@ -335,12 +357,12 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		archived := tasks.ArchiveDoneTasks(&m.state, now)
 		m.clampCursor()
 		if len(archived) == 0 {
-			m.status = "no done tasks to archive"
+			m.status = m.str.StatusNoDoneTasks
 			m.lastErr = nil
 			break
 		}
 		m.undoSet = archived
-		m.status = fmt.Sprintf("archived %d task(s) (press x to undo)", len(archived))
+		m.status = fmt.Sprintf(m.str.StatusArchivedFmt, len(archived))
 		m.lastErr = nil
 		m.save()
 	}
@@ -391,7 +413,7 @@ func (m model) handleEditScreen(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Toggle): // enter = confirm field
 			if m.editFieldIdx == 0 {
 				if strings.TrimSpace(m.input) == "" {
-					m.status = "title cannot be empty"
+					m.status = m.str.StatusTitleEmpty
 					m.lastErr = fmt.Errorf("empty")
 					return m, nil
 				}
@@ -444,13 +466,13 @@ func (m model) handleEditScreen(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.editIsNew = false
 		m.editDirty = false
 		m.editDiscardPrompt = false
-		m.status = "saved"
+		m.status = m.str.StatusSaved
 		m.lastErr = nil
 		m.save()
 	case key.Matches(msg, m.keys.Cancel): // esc
 		if m.editDirty && !m.editDiscardPrompt {
 			m.editDiscardPrompt = true
-			m.status = "unsaved changes — press esc again to discard, w to save"
+			m.status = m.str.StatusUnsavedChanges
 			m.lastErr = nil
 			return m, nil
 		}
@@ -498,7 +520,7 @@ func (m *model) applyEditDraft() error {
 			due, err = time.Parse("2006-01-02", raw)
 		}
 		if err != nil {
-			return fmt.Errorf("invalid date \"" + raw + "\" — use YYYY-MM-DD or +N days")
+			return fmt.Errorf(m.str.StatusInvalidDateFmt, raw)
 		}
 		_ = tasks.SetDueDate(&m.state, m.cursor, &due, now)
 	}
@@ -513,7 +535,7 @@ func (m model) handleConfirmMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.lastErr = err
 		} else {
 			m.clampCursor()
-			m.status = "task removed"
+			m.status = m.str.StatusTaskRemoved
 			m.lastErr = nil
 			m.undoSet = nil
 			m.save()
@@ -521,16 +543,44 @@ func (m model) handleConfirmMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.confirming = false
 	case key.Matches(msg, m.keys.Deny):
 		m.confirming = false
-		m.status = "delete cancelled"
+		m.status = m.str.StatusDeleteCancelled
 		m.lastErr = nil
 	}
 	return m, nil
 }
 
+func (m model) handleAboutScreen(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Up):
+		if m.aboutLangIdx > 0 {
+			m.aboutLangIdx--
+			m.str = availableLangs[m.aboutLangIdx].get()
+			m.keys = defaultKeyMap(m.str)
+			m.state.Lang = availableLangs[m.aboutLangIdx].code
+			m.save()
+		}
+	case key.Matches(msg, m.keys.Down):
+		if m.aboutLangIdx < len(availableLangs)-1 {
+			m.aboutLangIdx++
+			m.str = availableLangs[m.aboutLangIdx].get()
+			m.keys = defaultKeyMap(m.str)
+			m.state.Lang = availableLangs[m.aboutLangIdx].code
+			m.save()
+		}
+	default:
+		m.aboutScreen = false
+	}
+	return m, nil
+}
+
+func (m model) Farewell() string {
+	return m.str.FarewellMsg
+}
+
 func (m *model) save() {
 	if err := m.store.Save(m.state); err != nil {
 		m.lastErr = err
-		m.status = fmt.Sprintf("save error: %v", err)
+		m.status = fmt.Sprintf(m.str.StatusSaveErrorFmt, err)
 	}
 }
 
@@ -580,33 +630,45 @@ func (m *model) listHeight() int {
 // keyBarItems returns the individual hint chunks for the current mode.
 // Each chunk is a pair of rendered strings: [keyPart, labelPart].
 func (m *model) keyBarItems() [][2]string {
+	s := m.str
+	if m.aboutScreen {
+		return [][2]string{{"↑↓", s.KeyNavigate}, {s.KeyAnyKey, s.KeyCancel}}
+	}
 	if m.confirming {
-		return [][2]string{{"y", "confirm"}, {"n/esc", "cancel"}}
+		return [][2]string{{"y", s.KeyConfirm}, {"n/esc", s.KeyCancel}}
 	}
 	if m.editScreen {
 		if m.editFieldActive {
-			return [][2]string{{"enter", "confirm field"}, {"esc", "revert field"}, {"←→", "move caret"}, {"⌫/del", "delete char"}}
+			return [][2]string{{"enter", s.KeyConfirmField}, {"esc", s.KeyRevertField}, {"←→", s.KeyMoveCaret}, {"⌫/del", s.KeyDeleteChar}}
 		}
-		return [][2]string{{"↑↓", "navigate"}, {"enter", "edit field"}, {"w", "save"}, {"esc", "discard"}}
+		return [][2]string{{"↑↓", s.KeyNavigate}, {"enter", s.KeyEditField}, {"w", s.KeySave}, {"esc", s.KeyDiscard}}
 	}
 	if m.moving {
-		return [][2]string{{"↑↓", "reorder"}, {"enter", "confirm"}, {"m/esc", "abort"}}
+		return [][2]string{{"↑↓", s.KeyReorder}, {"enter", s.KeyConfirm}, {"m/esc", s.KeyAbort}}
 	}
 	return [][2]string{
-		{"enter", "toggle"},
-		{"a", "add"},
-		{"e", "edit"},
-		{"del", "delete"},
-		{"p", "pause"},
-		{"m", "move"},
-		{"x", "archive"},
-		{"?", "about"},
-		{"q", "quit"},
+		{"enter", s.KeyToggle},
+		{"a", s.KeyAdd},
+		{"e", s.KeyEdit},
+		{"del", s.KeyDelete},
+		{"p", s.KeyPause},
+		{"m", s.KeyMove},
+		{"x", s.KeyArchive},
+		{"q", s.KeyQuit},
 	}
 }
 
+// keyBarRightItem returns a right-anchored hint rendered for the current mode.
+func (m *model) keyBarRightItem() (string, int) {
+	if m.aboutScreen || m.confirming || m.editScreen || m.moving {
+		return "", 0
+	}
+	rendered := btmBarKeyStyle.Render("?") + btmBarPieceStyle.Render(" "+m.str.KeyAbout)
+	return rendered, lipgloss.Width(rendered)
+}
+
 // wrapKeyBar groups hint items into lines that each fit within w,
-// returning each line pre-rendered.
+// returning each line pre-rendered. The last line has the about hint right-anchored.
 func (m *model) wrapKeyBar(w int) []string {
 	items := m.keyBarItems()
 	sep := btmBarPieceStyle.Render(" | ")
@@ -621,6 +683,8 @@ func (m *model) wrapKeyBar(w int) []string {
 		rendered := btmBarKeyStyle.Render(it[0]) + btmBarPieceStyle.Render(" "+it[1])
 		chunks = append(chunks, chunk{rendered, lipgloss.Width(rendered)})
 	}
+
+	rightRendered, rightW := m.keyBarRightItem()
 
 	// padding(0,1) on btmBarStyle = 1 char each side
 	avail := w - 2
@@ -645,6 +709,13 @@ func (m *model) wrapKeyBar(w int) []string {
 		} else {
 			lineRendered += sepRendered + c.renderedItem
 			lineW += sw + c.displayW
+		}
+	}
+	// last line: right-anchor the about hint if there's room
+	if rightRendered != "" {
+		space := avail - lineW - rightW
+		if space >= 1 {
+			lineRendered += btmBarPieceStyle.Render(strings.Repeat(" ", space)) + rightRendered
 		}
 	}
 	if lineRendered != "" {
@@ -676,22 +747,34 @@ func (m model) View() string {
 
 	// Compute key bar FIRST so we can derive an exact list height.
 	keyBarLines := m.wrapKeyBar(w)
-	// top bar (1) + status bar (1) + key bar lines
-	listH := h - 2 - len(keyBarLines)
+
+	// Always use normal-mode key bar height for listH so total render height
+	// stays constant across modes — prevents bubbletea leaving stale lines.
+	normalM := m
+	normalM.aboutScreen = false
+	normalM.confirming = false
+	normalM.editScreen = false
+	normalM.moving = false
+	baseKeyBarH := normalM.keyBarLineCount(w)
+
+	listH := h - 2 - baseKeyBarH
 	if listH < 1 {
 		listH = 1
+	}
+	for len(keyBarLines) < baseKeyBarH {
+		keyBarLines = append(keyBarLines, btmBarStyle.Width(w).Render(""))
 	}
 
 	// ── top bar ──────────────────────────────────────────────────────────────
 	var modeTag string
 	if m.moving {
-		modeTag = "  [MOVE]"
+		modeTag = m.str.ModeMove
 	} else if m.editScreen && m.editIsNew {
-		modeTag = "  [ADD]"
+		modeTag = m.str.ModeAdd
 	} else if m.editScreen {
-		modeTag = "  [EDIT]"
+		modeTag = m.str.ModeEdit
 	} else if m.confirming {
-		modeTag = "  [DELETE?]"
+		modeTag = m.str.ModeDelete
 	}
 
 	total := len(m.state.Tasks)
@@ -705,7 +788,7 @@ func (m model) View() string {
 			paused++
 		}
 	}
-	topRight := fmt.Sprintf("%d done %d paused / %d%s", done, paused, total, modeTag)
+	topRight := fmt.Sprintf(m.str.StatsFmt, done, paused, total, modeTag)
 	topLeft := "taskigt"
 	if m.buildVersion != "" {
 		topLeft += " " + m.buildVersion
@@ -728,22 +811,30 @@ func (m model) View() string {
 			body.WriteString(hintStyle.Render("  "+m.buildVersion) + "\n")
 		}
 		body.WriteString("\n")
-		body.WriteString("  Built by Karl Bernstål\n")
+		body.WriteString("  " + m.str.AboutBuiltBy + "\n")
 		body.WriteString("\n")
-		body.WriteString(hintStyle.Render("  The task manager that judges you for having too many tasks.") + "\n")
-		body.WriteString(hintStyle.Render("  Taskigt: Swedish for \"mean\". It knows what it is.") + "\n")
-		body.WriteString(hintStyle.Render("  No due dates were harmed in the making of this software.") + "\n")
+		body.WriteString(hintStyle.Render("  "+m.str.AboutTagline) + "\n")
+		body.WriteString(hintStyle.Render("  "+m.str.AboutMeaning) + "\n")
+		body.WriteString(hintStyle.Render("  "+m.str.AboutNoDates) + "\n")
 		body.WriteString("\n")
-		body.WriteString(hintStyle.Render("  Data: "+m.storePath) + "\n")
+		body.WriteString(hintStyle.Render("  "+m.str.AboutDataLabel+m.storePath) + "\n")
 		body.WriteString("\n")
-		body.WriteString(hintStyle.Render("  Press any key to close") + "\n")
+		for i, l := range availableLangs {
+			if i == m.aboutLangIdx {
+				body.WriteString(selectedRowStyle.Render("  ▸ "+l.label) + "\n")
+			} else {
+				body.WriteString(hintStyle.Render("    "+l.label) + "\n")
+			}
+		}
+		body.WriteString("\n")
+		body.WriteString(hintStyle.Render("  "+m.str.AboutDismiss) + "\n")
 	} else if m.confirming {
 		title := ""
 		if len(m.state.Tasks) > 0 {
 			title = m.state.Tasks[m.cursor].Title
 		}
 		body.WriteString("\n")
-		body.WriteString(errorStyle.Render(fmt.Sprintf("  Delete \"%s\"?", title)) + "\n")
+		body.WriteString(errorStyle.Render("  "+fmt.Sprintf(m.str.DeleteConfirmFmt, title)) + "\n")
 	} else if m.editScreen {
 		// ── edit screen (also used for new task) ─────────────────────────────────────────────
 		type fieldRow struct{ label, value, hint string }
@@ -752,14 +843,14 @@ func (m model) View() string {
 			dueDisplay = "(none)"
 		}
 		fields := []fieldRow{
-			{"Title", m.editDraft.Title, "text"},
-			{"Due date", dueDisplay, "YYYY-MM-DD or +N days, empty to clear"},
+			{m.str.FieldTitle, m.editDraft.Title, m.str.FieldHintTitle},
+			{m.str.FieldDueDate, dueDisplay, m.str.FieldHintDue},
 		}
 		body.WriteString("\n")
 		if m.editIsNew {
-			body.WriteString(hintStyle.Render("  New task") + "\n")
+			body.WriteString(hintStyle.Render("  "+m.str.EditNewTask) + "\n")
 		} else {
-			body.WriteString(hintStyle.Render("  Edit task") + "\n")
+			body.WriteString(hintStyle.Render("  "+m.str.EditEditTask) + "\n")
 		}
 		body.WriteString("\n")
 		for i, f := range fields {
@@ -780,7 +871,7 @@ func (m model) View() string {
 		}
 	} else if len(m.state.Tasks) == 0 {
 		body.WriteString("\n")
-		body.WriteString(hintStyle.Render("  No tasks yet. Press a to add one.") + "\n")
+		body.WriteString(hintStyle.Render("  "+m.str.EmptyList) + "\n")
 	} else {
 		end := m.scroll + listH
 		if end > len(m.state.Tasks) {
@@ -805,7 +896,7 @@ func (m model) View() string {
 				overdue := now.After(*task.DueAt) && !task.Done
 				formatted := task.DueAt.Format("Jan 02")
 				if overdue {
-					dueSuffix = " " + overdueDateStyle.Render("(overdue "+formatted+")")
+					dueSuffix = " " + overdueDateStyle.Render("("+fmt.Sprintf(m.str.DueOverdueFmt, formatted)+")")
 				} else {
 					dueSuffix = " " + dueDateStyle.Render("("+formatted+")")
 				}

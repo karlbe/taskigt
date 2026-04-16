@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"taskigt/internal/i18n"
 	"taskigt/internal/tasks"
 	"taskigt/internal/tui"
 )
@@ -29,11 +30,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	model := tui.NewModel(state, store, BuildVersion, storePath)
+	model := tui.NewModel(state, store, BuildVersion, storePath, i18n.ForCode(state.Lang))
 	program := tea.NewProgram(model, tea.WithAltScreen())
 
-	if _, err := program.Run(); err != nil {
+	finalModel, err := program.Run()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
 		os.Exit(1)
+	}
+	type fareweller interface{ Farewell() string }
+	if f, ok := finalModel.(fareweller); ok {
+		fmt.Println(f.Farewell())
 	}
 }
