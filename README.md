@@ -1,53 +1,78 @@
 # taskigt
 
-Mean minimal checklist manager in terminal with Bubble Tea.
+Mean (taskig in swedish) minimal checklist manager in the terminal, built with [Bubble Tea](https://github.com/charmbracelet/bubbletea).
+
+## Screenshots
+
+
+![Main screen](screenshots/main_screen.png)
+
 
 ## Keybindings
 
 ### Normal mode
 
-- `↑/↓`: navigate
-- `enter`: toggle task done/undone
-- `p`: pause/unpause task
-- `a`: add task
-- `e`: edit task title
-- `D`: set due date
-- `delete`: delete selected task (prompts for confirmation)
-- `m`: enter move mode — use `↑/↓` to reorder, `enter` to confirm, `m`/`esc` to cancel
-- `x`: archive all done tasks (press `x` again to undo last archive)
-- `?`: about
-- `q` or `ctrl+c`: quit
+| Key | Action |
+|-----|--------|
+| `↑/↓` | Navigate |
+| `enter` | Toggle done/undone |
+| `p` | Pause/unpause task |
+| `a` | Add task |
+| `e` | Edit task |
+| `D` | Set due date |
+| `delete` | Delete selected task (confirms first) |
+| `m` | Move mode — `↑/↓` reorder, `enter` confirm, `m`/`esc` cancel |
+| `x` | Archive all done tasks (`x` again to undo) |
+| `?` | About / language selector |
+| `q` / `ctrl+c` | Quit |
 
 ### Edit screen
 
-- `↑/↓`: navigate fields
-- `enter`: activate/confirm field
-- `←/→`: move cursor within field
-- `backspace`/`delete`: delete characters
-- `esc`: revert field / discard changes
-- `w`: save and exit
+| Key | Action |
+|-----|--------|
+| `↑/↓` | Navigate fields |
+| `enter` | Activate/confirm field |
+| `←/→` | Move cursor within field |
+| `backspace`/`delete` | Delete characters |
+| `esc` | Revert field / discard changes |
+| `w` | Save and exit |
 
 ### Confirmation dialog
 
-- `y`: confirm
-- `n` or `esc`: cancel
+| Key | Action |
+|-----|--------|
+| `y` | Confirm |
+| `n` / `esc` | Cancel |
 
-## Persistence
+## Language
 
-Data is stored in `tasks.json` (human-readable, deterministic JSON).
-Done tasks can be archived into the same file under `archived`.
+Press `?` to open the about dialog. Use `↑/↓` to switch between **English** and **Svenska**. The selection is saved automatically.
 
-## Run
+## Data
+
+Tasks are stored as human-readable JSON. Location by platform:
+
+| Platform | Path |
+|----------|------|
+| Windows | `%USERPROFILE%\.taskigt\tasks.json` |
+| Linux / macOS | `~/.taskigt/tasks.json` |
+
+Done tasks can be archived into the same file under the `archived` key.
+
+## Build & run
+
+```bash
+make run        # run without building
+make build      # build to bin/
+make install    # build and install to Go bin dir (on PATH)
+make test       # run tests
+make clean      # remove bin/
+```
+
+Or without make:
 
 ```bash
 go run ./cmd/taskigt
-```
-
-## Make targets
-
-```bash
-make run
-make test
-make build
-make clean
+go build -o bin/taskigt ./cmd/taskigt
+go install ./cmd/taskigt
 ```
