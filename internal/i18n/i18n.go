@@ -83,6 +83,20 @@ type Strings struct {
 	HelpBackspace string
 	HelpAbout     string
 
+	// archive menu
+	ArchiveMenuTitle        string
+	ArchiveMenuTaskFmt      string // arg: title
+	ArchiveMenuAllFmt       string // arg: count of done tasks
+	ArchiveMenuShowFmt      string // arg: count
+	ArchiveMenuDeleteFmt    string // arg: count
+	ArchiveDeleteConfirmFmt string // arg: count
+
+	// archive page
+	ArchivePageTitleFmt  string // arg: count
+	ArchivePageEmpty     string
+	ArchivePageUnarchive string
+	ArchivePageBack      string
+
 	// farewell
 	FarewellMsg string
 
@@ -130,6 +144,18 @@ func English() Strings {
 		AboutNoDates:   "No due dates were harmed in the making of this software.",
 		AboutDataLabel: "Data file: ",
 		AboutDismiss:   "Press any key to save and close",
+
+		ArchiveMenuTitle:        "Archive",
+		ArchiveMenuTaskFmt:      `Archive "%s"`,
+		ArchiveMenuAllFmt:       "Archive %d done tasks",
+		ArchiveMenuShowFmt:      "Show %d archived",
+		ArchiveMenuDeleteFmt:    "Delete %d archived",
+		ArchiveDeleteConfirmFmt: "Permanently delete all %d archived tasks?",
+		ArchivePageTitleFmt:     "Archived (%d)",
+		ArchivePageEmpty:        "No archived tasks.",
+		ArchivePageUnarchive:    "unarchive",
+		ArchivePageBack:         "back",
+
 		FarewellMsg:    "Tack för att du är så taskig! /Karl",
 
 		KeyConfirm:      "confirm",
@@ -217,6 +243,18 @@ func Swedish() Strings {
 		AboutNoDates:   "Inga förfallodatum skadades i skapandet av denna programvara.",
 		AboutDataLabel: "Datafil: ",
 		AboutDismiss:   "Tryck på valfri tangent för att spara och stänga",
+
+		ArchiveMenuTitle:        "Arkivera",
+		ArchiveMenuTaskFmt:      `Arkivera "%s"`,
+		ArchiveMenuAllFmt:       "Arkivera %d klara uppgifter",
+		ArchiveMenuShowFmt:      "Visa %d arkiverade",
+		ArchiveMenuDeleteFmt:    "Ta bort %d arkiverade",
+		ArchiveDeleteConfirmFmt: "Ta bort alla %d arkiverade uppgifter permanent?",
+		ArchivePageTitleFmt:     "Arkiverade (%d)",
+		ArchivePageEmpty:        "Inga arkiverade uppgifter.",
+		ArchivePageUnarchive:    "återställ",
+		ArchivePageBack:         "tillbaka",
+
 		FarewellMsg:    "Tack för att du är så taskig! /Karl",
 
 		KeyConfirm:      "bekräfta",

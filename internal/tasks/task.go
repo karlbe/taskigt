@@ -14,8 +14,8 @@ type Task struct {
 	PrevIndex int        `json:"prev_index,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
-	DoneAt    time.Time  `json:"done_at,omitempty"`
-	PausedAt  time.Time  `json:"paused_at,omitempty"`
+	DoneAt    *time.Time `json:"done_at,omitempty"`
+	PausedAt  *time.Time `json:"paused_at,omitempty"`
 }
 
 type AppState struct {

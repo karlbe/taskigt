@@ -76,6 +76,12 @@ type model struct {
 	confirming     bool
 	aboutScreen    bool
 	aboutLangIdx   int
+	archiveMenu          bool
+	archiveMenuIdx       int
+	archivePage          bool
+	archivePageCursor    int
+	archivePageScroll    int
+	archiveConfirmDelete bool
 	// edit screen
 	editScreen        bool
 	editIsNew         bool // true when creating a new task
@@ -128,6 +134,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if m.aboutScreen {
 			return m.handleAboutScreen(msg)
+		}
+		if m.archiveConfirmDelete {
+			return m.handleArchiveConfirmDelete(msg)
+		}
+		if m.archivePage {
+			return m.handleArchivePage(msg)
+		}
+		if m.archiveMenu {
+			return m.handleArchiveMenu(msg)
 		}
 		if m.confirming {
 			return m.handleConfirmMode(msg)
@@ -343,28 +358,10 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.status = ""
 		m.lastErr = nil
 	case key.Matches(msg, m.keys.ArchiveDone):
-		now := time.Now()
-		if len(m.undoSet) > 0 {
-			restored := tasks.UnarchiveTasks(&m.state, m.undoSet, now)
-			m.undoSet = nil
-			m.clampCursor()
-			m.status = fmt.Sprintf(m.str.StatusRestoredFmt, restored)
-			m.lastErr = nil
-			m.save()
-			break
-		}
-
-		archived := tasks.ArchiveDoneTasks(&m.state, now)
-		m.clampCursor()
-		if len(archived) == 0 {
-			m.status = m.str.StatusNoDoneTasks
-			m.lastErr = nil
-			break
-		}
-		m.undoSet = archived
-		m.status = fmt.Sprintf(m.str.StatusArchivedFmt, len(archived))
+		m.archiveMenu = true
+		m.archiveMenuIdx = 0
+		m.status = ""
 		m.lastErr = nil
-		m.save()
 	}
 
 	return m, nil
@@ -577,6 +574,125 @@ func (m model) Farewell() string {
 	return m.str.FarewellMsg
 }
 
+func (m model) handleArchiveMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	const numItems = 4
+	switch {
+	case key.Matches(msg, m.keys.Up):
+		if m.archiveMenuIdx > 0 {
+			m.archiveMenuIdx--
+		}
+	case key.Matches(msg, m.keys.Down):
+		if m.archiveMenuIdx < numItems-1 {
+			m.archiveMenuIdx++
+		}
+	case key.Matches(msg, m.keys.Toggle):
+		switch m.archiveMenuIdx {
+		case 0: // archive selected task (any state)
+			if len(m.state.Tasks) == 0 {
+				break
+			}
+			_, err := tasks.ArchiveTask(&m.state, m.cursor, time.Now())
+			if err != nil {
+				m.status = err.Error()
+				m.lastErr = err
+			} else {
+				m.clampCursor()
+				m.status = fmt.Sprintf(m.str.StatusArchivedFmt, 1)
+				m.lastErr = nil
+				m.save()
+			}
+			m.archiveMenu = false
+		case 1: // archive all done tasks
+			archived := tasks.ArchiveDoneTasks(&m.state, time.Now())
+			if len(archived) == 0 {
+				break
+			}
+			m.clampCursor()
+			m.status = fmt.Sprintf(m.str.StatusArchivedFmt, len(archived))
+			m.lastErr = nil
+			m.save()
+			m.archiveMenu = false
+		case 2: // show archived page
+			if len(m.state.Archived) == 0 {
+				break
+			}
+			m.archiveMenu = false
+			m.archivePage = true
+			m.archivePageCursor = 0
+			m.archivePageScroll = 0
+		case 3: // delete all archived
+			if len(m.state.Archived) == 0 {
+				break
+			}
+			m.archiveConfirmDelete = true
+		}
+	case key.Matches(msg, m.keys.Cancel):
+		m.archiveMenu = false
+	}
+	return m, nil
+}
+
+func (m model) handleArchivePage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Up):
+		if m.archivePageCursor > 0 {
+			m.archivePageCursor--
+			m.adjustArchiveScroll()
+		}
+	case key.Matches(msg, m.keys.Down):
+		if m.archivePageCursor < len(m.state.Archived)-1 {
+			m.archivePageCursor++
+			m.adjustArchiveScroll()
+		}
+	case key.Matches(msg, m.keys.Toggle):
+		if len(m.state.Archived) == 0 {
+			break
+		}
+		if err := tasks.UnarchiveTask(&m.state, m.archivePageCursor, time.Now()); err != nil {
+			m.status = err.Error()
+			m.lastErr = err
+		} else {
+			if m.archivePageCursor >= len(m.state.Archived) && m.archivePageCursor > 0 {
+				m.archivePageCursor--
+			}
+			m.adjustArchiveScroll()
+			m.save()
+			if len(m.state.Archived) == 0 {
+				m.archivePage = false
+			}
+		}
+	case key.Matches(msg, m.keys.Cancel):
+		m.archivePage = false
+	}
+	return m, nil
+}
+
+func (m model) handleArchiveConfirmDelete(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Confirm):
+		tasks.DeleteAllArchived(&m.state)
+		m.archiveConfirmDelete = false
+		m.archiveMenu = false
+		m.save()
+	case key.Matches(msg, m.keys.Deny):
+		m.archiveConfirmDelete = false
+	}
+	return m, nil
+}
+
+func (m *model) adjustArchiveScroll() {
+	listH := m.listHeight()
+	if listH <= 0 {
+		return
+	}
+	if m.archivePageCursor < m.archivePageScroll {
+		m.archivePageScroll = m.archivePageCursor
+	}
+	if m.archivePageCursor >= m.archivePageScroll+listH {
+		m.archivePageScroll = m.archivePageCursor - listH + 1
+	}
+}
+
 func (m *model) save() {
 	if err := m.store.Save(m.state); err != nil {
 		m.lastErr = err
@@ -633,6 +749,15 @@ func (m *model) keyBarItems() [][2]string {
 	s := m.str
 	if m.aboutScreen {
 		return [][2]string{{"↑↓", s.KeyNavigate}, {s.KeyAnyKey, s.KeyCancel}}
+	}
+	if m.archiveConfirmDelete {
+		return [][2]string{{"y", s.KeyConfirm}, {"n/esc", s.KeyCancel}}
+	}
+	if m.archivePage {
+		return [][2]string{{"↑↓", s.KeyNavigate}, {"enter", s.ArchivePageUnarchive}, {"esc", s.ArchivePageBack}}
+	}
+	if m.archiveMenu {
+		return [][2]string{{"↑↓", s.KeyNavigate}, {"enter", s.KeyConfirm}, {"esc", s.KeyCancel}}
 	}
 	if m.confirming {
 		return [][2]string{{"y", s.KeyConfirm}, {"n/esc", s.KeyCancel}}
@@ -755,6 +880,9 @@ func (m model) View() string {
 	normalM.confirming = false
 	normalM.editScreen = false
 	normalM.moving = false
+	normalM.archiveMenu = false
+	normalM.archivePage = false
+	normalM.archiveConfirmDelete = false
 	baseKeyBarH := normalM.keyBarLineCount(w)
 
 	listH := h - 2 - baseKeyBarH
@@ -828,6 +956,81 @@ func (m model) View() string {
 		}
 		body.WriteString("\n")
 		body.WriteString(hintStyle.Render("  "+m.str.AboutDismiss) + "\n")
+	} else if m.archiveConfirmDelete {
+		body.WriteString("\n")
+		body.WriteString(errorStyle.Render("  "+fmt.Sprintf(m.str.ArchiveDeleteConfirmFmt, len(m.state.Archived))) + "\n")
+	} else if m.archivePage {
+		body.WriteString("\n")
+		body.WriteString(selectedRowStyle.Render("  "+fmt.Sprintf(m.str.ArchivePageTitleFmt, len(m.state.Archived))) + "\n")
+		body.WriteString("\n")
+		if len(m.state.Archived) == 0 {
+			body.WriteString(hintStyle.Render("  "+m.str.ArchivePageEmpty) + "\n")
+		} else {
+			end := m.archivePageScroll + listH - 3 // 3 lines used by header above
+			if end > len(m.state.Archived) {
+				end = len(m.state.Archived)
+			}
+			showBelow := end < len(m.state.Archived)
+			for i := m.archivePageScroll; i < end; i++ {
+				t := m.state.Archived[i]
+				var scrollCol string
+				if i == m.archivePageScroll && m.archivePageScroll > 0 {
+					scrollCol = hintStyle.Render("↑ ")
+				} else if i == end-1 && showBelow {
+					scrollCol = hintStyle.Render("↓ ")
+				} else {
+					scrollCol = "  "
+				}
+				pointer := "  "
+				if i == m.archivePageCursor {
+					pointer = "▌ "
+				}
+				row := fmt.Sprintf("%s%s  ✅  %s", pointer, "  ", t.Title)
+				if i == m.archivePageCursor {
+					row = scrollCol + selectedRowStyle.Render(row)
+				} else {
+					row = scrollCol + doneRowStyle.Render(row)
+				}
+				body.WriteString(row + "\n")
+			}
+		}
+	} else if m.archiveMenu {
+		body.WriteString("\n")
+		body.WriteString(selectedRowStyle.Render("  "+m.str.ArchiveMenuTitle) + "\n")
+		body.WriteString("\n")
+		// item 0: archive selected task
+		taskTitle := ""
+		if len(m.state.Tasks) > 0 {
+			taskTitle = m.state.Tasks[m.cursor].Title
+		}
+		doneCount := 0
+		for _, t := range m.state.Tasks {
+			if t.Done {
+				doneCount++
+			}
+		}
+		items := []struct {
+			label   string
+			enabled bool
+		}{
+			{fmt.Sprintf(m.str.ArchiveMenuTaskFmt, taskTitle), len(m.state.Tasks) > 0},
+			{fmt.Sprintf(m.str.ArchiveMenuAllFmt, doneCount), doneCount > 0},
+			{fmt.Sprintf(m.str.ArchiveMenuShowFmt, len(m.state.Archived)), len(m.state.Archived) > 0},
+			{fmt.Sprintf(m.str.ArchiveMenuDeleteFmt, len(m.state.Archived)), len(m.state.Archived) > 0},
+		}
+		for i, item := range items {
+			prefix := "    "
+			if i == m.archiveMenuIdx {
+				prefix = "  ▸ "
+			}
+			if i == m.archiveMenuIdx && item.enabled {
+				body.WriteString(selectedRowStyle.Render(prefix+item.label) + "\n")
+			} else if item.enabled {
+				body.WriteString(prefix + item.label + "\n")
+			} else {
+				body.WriteString(hintStyle.Render(prefix+item.label) + "\n")
+			}
+		}
 	} else if m.confirming {
 		title := ""
 		if len(m.state.Tasks) > 0 {
@@ -873,11 +1076,22 @@ func (m model) View() string {
 		body.WriteString("\n")
 		body.WriteString(hintStyle.Render("  "+m.str.EmptyList) + "\n")
 	} else {
+		showAbove := m.scroll > 0
 		end := m.scroll + listH
 		if end > len(m.state.Tasks) {
 			end = len(m.state.Tasks)
 		}
+		showBelow := end < len(m.state.Tasks)
 		for i := m.scroll; i < end; i++ {
+			// scroll indicator column
+			var scrollCol string
+			if i == m.scroll && showAbove {
+				scrollCol = hintStyle.Render("↑ ")
+			} else if i == end-1 && showBelow {
+				scrollCol = hintStyle.Render("↓ ")
+			} else {
+				scrollCol = "  "
+			}
 			task := m.state.Tasks[i]
 			pointer := "  "
 			if i == m.cursor {
@@ -903,9 +1117,8 @@ func (m model) View() string {
 			}
 			row := fmt.Sprintf("%s%s  %s", pointer, mark, task.Title)
 			// clip to terminal width so long titles don't break line-count
-			if lipgloss.Width(row) > w {
-				// truncate plain title to fit
-				maxLen := w - 8 // generous margin for pointer+mark
+			if lipgloss.Width(scrollCol)+lipgloss.Width(row) > w {
+				maxLen := w - 10 // margin for scrollCol+pointer+mark
 				if maxLen < 4 {
 					maxLen = 4
 				}
@@ -916,13 +1129,13 @@ func (m model) View() string {
 				row = fmt.Sprintf("%s%s  %s", pointer, mark, string(title))
 			}
 			if task.Done && i != m.cursor {
-				row = doneRowStyle.Render(row) + dueSuffix
+				row = scrollCol + doneRowStyle.Render(row) + dueSuffix
 			} else if task.Paused && i != m.cursor {
-				row = pausedRowStyle.Render(row) + dueSuffix
+				row = scrollCol + pausedRowStyle.Render(row) + dueSuffix
 			} else if i == m.cursor {
-				row = selectedRowStyle.Render(row) + dueSuffix
+				row = scrollCol + selectedRowStyle.Render(row) + dueSuffix
 			} else {
-				row = row + dueSuffix
+				row = scrollCol + row + dueSuffix
 			}
 			body.WriteString(row + "\n")
 		}

@@ -81,7 +81,8 @@ func ToggleDone(state *AppState, idx int, now time.Time) (int, error) {
 	t := state.Tasks[idx]
 	if !t.Done {
 		t.Done = true
-		t.DoneAt = now
+		doneAt := now
+		t.DoneAt = &doneAt
 		t.UpdatedAt = now
 		t.PrevIndex = -1
 		state.Tasks[idx] = t
@@ -89,7 +90,7 @@ func ToggleDone(state *AppState, idx int, now time.Time) (int, error) {
 	}
 
 	t.Done = false
-	t.DoneAt = time.Time{}
+	t.DoneAt = nil
 	t.UpdatedAt = now
 	t.PrevIndex = -1
 	state.Tasks[idx] = t
@@ -106,9 +107,10 @@ func TogglePaused(state *AppState, idx int, now time.Time) error {
 	}
 	t.Paused = !t.Paused
 	if t.Paused {
-		t.PausedAt = now
+		pausedAt := now
+		t.PausedAt = &pausedAt
 	} else {
-		t.PausedAt = time.Time{}
+		t.PausedAt = nil
 	}
 	t.UpdatedAt = now
 	return nil
@@ -145,6 +147,32 @@ func ArchiveDoneTasks(state *AppState, now time.Time) []Task {
 	}
 	state.Tasks = remaining
 	return archived
+}
+
+func ArchiveTask(state *AppState, idx int, now time.Time) (Task, error) {
+	if idx < 0 || idx >= len(state.Tasks) {
+		return Task{}, fmt.Errorf("index out of range")
+	}
+	task := state.Tasks[idx]
+	task.UpdatedAt = now
+	state.Tasks = append(state.Tasks[:idx], state.Tasks[idx+1:]...)
+	state.Archived = append(state.Archived, task)
+	return task, nil
+}
+
+func UnarchiveTask(state *AppState, archivedIdx int, now time.Time) error {
+	if archivedIdx < 0 || archivedIdx >= len(state.Archived) {
+		return fmt.Errorf("index out of range")
+	}
+	task := state.Archived[archivedIdx]
+	task.UpdatedAt = now
+	state.Archived = append(state.Archived[:archivedIdx], state.Archived[archivedIdx+1:]...)
+	state.Tasks = append(state.Tasks, task)
+	return nil
+}
+
+func DeleteAllArchived(state *AppState) {
+	state.Archived = []Task{}
 }
 
 func UnarchiveTasks(state *AppState, toRestore []Task, now time.Time) int {
