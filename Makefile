@@ -12,7 +12,9 @@ else
   BUILD_TIME := v0.1_$(shell date -u +%Y-%m-%dT%H:%M)
 endif
 
-.PHONY: run test build install clean
+FOTOGRAF := G:/fotograf/fotograf.exe
+
+.PHONY: run test build install clean screenshot
 
 run:
 	go run ./cmd/$(APP)
@@ -26,6 +28,9 @@ build:
 
 install:
 	go install -ldflags "-X main.BuildVersion=$(BUILD_TIME)" ./cmd/$(APP)
+
+screenshot:
+	$(FOTOGRAF) -cmd bin/$(APP).exe -args "-data,demo.json" -o screenshots/main_screen.png -wait 3s -idle 500ms -cols 80 -rows 25 -fontsize 10 -scale 3
 
 clean:
 	$(RM_BIN)
