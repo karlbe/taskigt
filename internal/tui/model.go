@@ -772,10 +772,8 @@ func (m *model) keyBarItems() [][2]string {
 		return [][2]string{{"↑↓", s.KeyReorder}, {"enter", s.KeyConfirm}, {"m/esc", s.KeyAbort}}
 	}
 	return [][2]string{
-		{"enter", s.KeyToggle},
 		{"a", s.KeyAdd},
 		{"e", s.KeyEdit},
-		{"del", s.KeyDelete},
 		{"p", s.KeyPause},
 		{"m", s.KeyMove},
 		{"x", s.KeyArchive},
