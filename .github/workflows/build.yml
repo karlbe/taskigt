@@ -1,0 +1,33 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: |
+          VERSION=v0.1_$(date -u +%Y-%m-%dT%H:%M)
+          GOOS=linux   GOARCH=amd64 go build -ldflags "-X main.BuildVersion=$VERSION" -o taskigt-linux   ./cmd/taskigt
+          GOOS=windows GOARCH=amd64 go build -ldflags "-X main.BuildVersion=$VERSION" -o taskigt.exe     ./cmd/taskigt
+
+      - name: Update latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest build
+          prerelease: true
+          files: |
+            taskigt-linux
+            taskigt.exe
